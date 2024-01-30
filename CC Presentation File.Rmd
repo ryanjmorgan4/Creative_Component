@@ -1,0 +1,971 @@
+---
+title: "Estimating Win Probabilities for College Football Teams Ranked in the AP Poll- Sandbox for getting graphs"
+
+author: "Ryan Morgan"
+date: "November 30, 2017"
+output: 
+  pdf_document:
+    number_sections: true
+
+header-includes: \usepackage{setspace}\doublespacing
+geometry: margin=1in
+fontsize: 11pt
+---
+
+\raggedright
+\setlength{\parindent}{.5in}
+\clearpage
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+
+\newpage
+
+#Introduction
+
+
+```{r, echo = F,  fig.align='center', message=FALSE, warning=FALSE, fig.cap="Winning percentage for different AP Poll matchups since 1989. The horizontal axis of the graph is the Opponent ranking, the vertical axis is the Team’s winning percentage, and the facets are the Team ranking. For instance, the top left plot shows the winning percentage for teams ranked first in the AP Poll. Moving along the horizontal axis shows how the winning percentage varies as the Opponent's ranking changes."}
+library(tidyverse)
+
+Game_Logs <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Scraped_Data\\Game_Logs.csv")
+
+alpha_response <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\alpha_response.csv")
+
+all_predictions <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\all_predictions.csv")
+
+linear_mse <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\linear_mse.csv")
+
+logit_aic <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\logit_aic.csv")
+
+logit_loss <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\logit_loss.csv")
+
+OOB_Loss_Random_Forests <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\OOB_Loss_Random_Forests.csv")
+
+probit_aic <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\probit_aic.csv")
+
+probit_loss <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\probit_loss.csv")
+
+rf_ss_loss <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\rf_ss_loss.csv")
+
+season_specific_predictions <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Stored_Predictions\\season_specific_predictions.csv")
+
+
+tr = rep(rep(1:25, 25), 3)
+
+
+or=rep(rep(1:25, each=25), 3)
+
+
+loc = rep(-1:1, each=625)
+
+
+
+prediction_matrix = data.frame(Team_Rank=tr, Opponent_Rank = or, numLocation = loc, Diff_Ranks = tr-or, Avg_Rank = (tr+or)/2)
+
+vlines <- data.frame(Team_Rank=c(1:25), xints =c(1:25))
+
+
+
+Game_Logs_edit <- Game_Logs
+
+numRank <- gsub("Unranked",26, Game_Logs$Team_Rank)
+
+oppNumRank <- gsub("Unranked",26, Game_Logs$Opponent_Rank)
+
+Game_Logs_edit$Team_Rank = as.numeric(paste(numRank))
+
+Game_Logs_edit$Opponent_Rank = as.numeric(paste(oppNumRank))
+
+Game_Logs_edit <- Game_Logs_edit %>% filter(Team_Rank<26, Opponent_Rank<26, Season>1988)
+
+Game_Logs_edit %>%group_by(Team_Rank,Opponent_Rank) %>% summarise(Games=length(Result), Wins = sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% filter(Team_Rank == 1) %>% ggplot(aes(x=Opponent_Rank, y=100*WinPct))+geom_line(size=.5)+scale_y_continuous(limits=c(0,100))+facet_wrap(~Team_Rank)+xlab("Opponent Ranking")+ylab("Winning Percentage")+labs(title="")
+
+Game_Logs_edit %>%group_by(Team_Rank,Opponent_Rank) %>% summarise(Games=length(Result), Wins = sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% filter(Team_Rank == 25) %>% ggplot(aes(x=Opponent_Rank, y=100*WinPct))+geom_line(size=.5)+scale_y_continuous(limits=c(0,100))+facet_wrap(~Team_Rank)+xlab("Opponent Ranking")+ylab("Winning Percentage")+labs(title="")
+
+
+Game_Logs_edit %>%group_by(Team_Rank,Opponent_Rank) %>% summarise(Games=length(Result), Wins = sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% ggplot(aes(x=Opponent_Rank, y=100*WinPct))+geom_line(size=.5)+scale_y_continuous(limits=c(0,100))+facet_wrap(~Team_Rank)+xlab("Opponent Ranking")+ylab("Winning Percentage")+labs(title="")
+
+
+```
+
+
+
+
+
+
+```{r, echo=F, fig.cap = "Estimated win probabilities for the 2004 season. Probabilities were estimated using a generalized linear model (logit link). The horizontal axis of the graph is the Opponent ranking, the vertical axis is the Team’s estimated win probability, and the facets are the Team ranking. The win probabilities are colored by location (from the Team’s perspective). The vertical lines in each facet are where the Opponent ranking is equal to the Team ranking. This makes it easy to see if the Team is ranked higher than the Opponent. The horizontal dashed lines are at win probability equal to 0.50. This makes it easy to see if the Team is favored (a win probability higher than 0.50) or if the Opponent is favored (a Team win probability less than 0.50)."}
+
+
+all_predictions %>% filter(Season==2004, Team_Rank==1) %>% ggplot(aes(x=Opponent_Rank, y=Model2_GLM_Logit, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=1), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+all_predictions %>% filter(Season==2004, Team_Rank==25) %>% ggplot(aes(x=Opponent_Rank, y=Model2_GLM_Logit, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=25), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+all_predictions %>% filter(Season==2004) %>% ggplot(aes(x=Opponent_Rank, y=Model2_GLM_Logit, color=as.factor(numLocation)))+geom_line(size=.1)+geom_point(size=.1)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=xints), data=vlines, size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+```
+
+
+# Data Set Used
+
+
+# Generalized Linear Model Method
+
+## GLM Using Logit Link
+
+
+
+
+$$ Y_i = \left\{
+        \begin{array}{ll}
+            0 & \quad \text{Team lost game }i\\
+            1 & \quad \text{Team won game }i
+        \end{array}
+    \right. $$
+$$X_{1,i}: \text{Location of Game $i$, $-1$ for away, $0$ for neutral, and $1$ for home}$$
+$$X_{2,i}: \text{Difference in Team and Opponent Rank (Team minus Opponent)} $$
+$$X_{3,i}: \text{Average of Team and Opponent Rank} $$
+$$ P ( Y_i = 1 | X_{1,i}, X_{2,i}, X_{3,i} ) = \pi ( X_{1,i}, X_{2,i}, X_{3,i} ) $$
+$$ Y_i| X_{1,i}, X_{2,i}, X_{3,i} \sim  {\rm Bernoulli} ( \pi ( X_{1,i}, X_{2,i}, X_{3,i} ) )  $$
+$$\log \bigg(\frac{\pi ( X_{1,i}, X_{2,i}, X_{3,i} )}{1 - \pi ( X_{1,i}, X_{2,i}, X_{3,i} )} \bigg) =  \beta_1 \cdot X_{1,i} + \beta_2 \cdot X_{2,i} + \beta_3 \cdot X_{1,i} \cdot X_{3,i} + \beta_4 \cdot X_{2,i} \cdot X_{3,i} + \beta_5 \cdot X_{1,i} \cdot X_{2,i}$$
+$$\pi ( X_{1,i}, X_{2,i}, X_{3,i} ) = \frac{1}{1+ \exp(-1 \cdot [\beta_1 \cdot X_{1,i} + \beta_2 \cdot X_{2,i} + \beta_3 \cdot X_{1,i} \cdot X_{3,i} + \beta_4 \cdot X_{2,i} \cdot X_{3,i} + \beta_5 \cdot X_{1,i} \cdot X_{2,i}])} $$
+
+This model accounts for our "symmetry" restriction. To get the explanatory variables from the Opponent perspective, we can just take $-1$ times the explanatory variables from the Team perspective. This makes it so the probability a Team wins is one minus the probability the Team loses (which is the same as one minus the probability the Opponent wins). 
+To see this, consider the following example. Suppose we want to estimate the win probability of a Team ranked 3rd playing at home against an Opponent ranked 5th. In this example, $X_1 = 1$, $X_2 = 3-5 = -2$, and $X_3 = \frac{3+5}{2} = 4$. Therefore, we would estimate the win probability of the Team to be
+$$\pi ( X_1=1, X_2=-2, X_3=4 ) = \frac{1}{1+ \exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])} $$ 
+
+\newpage
+
+
+$$1 - \pi ( X_1=1, X_2=-2, X_3=4 ) = 1- \frac{1}{1+ \exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])} $$ 
+
+$$= \frac{\exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])}{\exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])} - \frac{1}{1+ \exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])}  $$
+
+
+$$= \frac{\exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])}{1+\exp(-1 \cdot [\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])} $$
+
+$$= \frac{\exp([\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])^{-1}}{1+\exp([\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])^{-1}} $$
+
+$$= \frac{1}{1+\exp([\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2])} $$
+
+$$=\frac{1}{1+\exp(-1 \cdot [\beta_1 \cdot -1 + \beta_2 \cdot 2 + \beta_3 \cdot -4 + \beta_4 \cdot 8 + \beta_5 \cdot 2])} $$
+
+$$= \pi (X_1=-1, X_2=2, X_3=4 ) $$
+
+
+
+
+
+
+
+ $\pi ( X_1=1, X_2=-2, X_3=4 )$ gives the Team's win probability for the given game and $1 -\pi ( X_1=1, X_2=-2, X_3=4 )$ gives the *Opponent's* win probability for the given game. By constructing the model in this way, we guarantee that $1 -\pi ( X_1=1, X_2=-2, X_3=4 ) = \pi (X_1=-1, X_2=2, X_3=4 )$. 
+
+Furthermore, if two evenly ranked teams were playing each other at a neutral site, neither team should be favored. Our model allows for this, because if the Team has the same rank as the Opponent and the game was played at a neutral site, $X_1 = 0$ and $X_2 = 0$, making it so the explanatory variables and interactions in our model are equal to 0. This causes the estimated win probability to be 0.50 because
+$$\pi ( X_1=0, X_2=0, X_3 ) = \frac{1}{1+ \exp(-1 \cdot [\beta_1 \cdot 0 + \beta_2 \cdot 0 + \beta_3 \cdot 0 + \beta_4 \cdot 0 + \beta_5 \cdot 0])} $$
+$$= \frac{1}{1+ \exp(0)} $$
+$$= \frac{1}{2}\text{ .}$$
+
+Allowing for the "symmetry" and forcing two evenly matched teams to have win probabilities of .5 was the reasoning behind only including the location of the game, the difference in ranks, and interactions involving location or difference in ranks in our model. 
+
+The only interactions that were found to be significant were the interaction between location and average rank, the interaction between difference in rank and average rank, and the interaction between location and difference in ranks. Other variables that were explored but not found to be significant were the game number, if the game was a bowl game or not, and if the game was a conference game or not.
+
+From the described model construction, we have five parameters to estimate corresponding to five variables constructed from three variables: $X_1$, $X_2$, and $X_3$. By considering all combinations of the presence or absence of the product terms $X_1 \cdot X_3$, $X_2 \cdot X_3$, and $X_1 \cdot X_2$, we arrive at the eight different sets of explanatory variables presented in Table 1. Table 2 displays the names and descriptions of the three variables used in the construction of the variables in Table 1.
+
+
+|Variable Set  |Explanatory Variables Used |  Parameters Estimated |
+|:---------------:|:-----------------------:|:----------------------------:|
+|1 |$X_1,X_2, X_1 \cdot X_3, X_2 \cdot X_3, X_1 \cdot X_2$ |$\beta_1, \beta_2, \beta_3, \beta_4, \beta_5$|
+|2| $X_1,X_2, X_1 \cdot X_3, X_2 \cdot X_3$|$\beta_1, \beta_2, \beta_3, \beta_4$ |
+|3 |$X_1,X_2, X_1 \cdot X_3, X_1 \cdot X_2$|$\beta_1, \beta_2, \beta_3, \beta_5$ |
+|4 |$X_1,X_2, X_1 \cdot X_3$ |$\beta_1, \beta_2, \beta_3$ |
+|5 |$X_1,X_2, X_2 \cdot X_3, X_1 \cdot X_2$ |$\beta_1, \beta_2, \beta_4, \beta_5$ |
+|6 |$X_1,X_2, X_2 \cdot X_3$ |$\beta_1, \beta_2, \beta_4$  |
+|7 |$X_1,X_2, X_1 \cdot X_2$|$\beta_1, \beta_2, \beta_5$ |
+|8 |$X_1,X_2$ | $\beta_1, \beta_2$|
+
+Table: Sets of variables considered in our analyses.
+
+\newpage
+
+--------------------------------------------------------------------
+ Variable Name  Variable Description
+--------------- -----------------------------------------------------
+    $X_1$       **numLocation:** The location of the game
+                from the Team perspective. $-1$ denotes Away,
+                $0$ denotes Neutral, $1$ denotes Home
+                        
+    
+    $X_2$       **DiffRanks:** The difference in Team Rank and
+                Opponent Rank (Team minus Opponent)
+                        
+    $X_3$       **AvgRank:** The average of the Team Rank and
+                Opponent Rank
+--------------------------------------------------------------------
+
+Table: Variable Names and Descriptions.
+
+
+
+
+```{r, echo=F, results='asis'}
+TEST<-all_predictions %>% filter(Team_Rank == 1, Opponent_Rank==25, numLocation==1, Season %in% c(1989,1990,1991,2014,2015,2016))%>% select(Season, Model1_GLM_Logit, Model2_GLM_Logit, Model3_GLM_Logit, Model4_GLM_Logit, Model5_GLM_Logit, Model6_GLM_Logit, Model7_GLM_Logit, Model8_GLM_Logit)
+
+TEST<- t(TEST)
+
+TEST <- TEST[2:9,]
+
+rownames(TEST)=c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+colnames(TEST)=c("1989","1990","1991","2014","2015","2016")
+
+knitr::kable(round(TEST,3),caption="Win probabilities for a number 1 ranked Team playing at home agains an Opponent ranked 25 for six different seasons. Probabilities were found using GLMs with a logit link and each of the eight variable sets in Table 1.")
+```
+
+
+```{r, echo=F, results='asis'}
+TEST<-all_predictions %>% filter(Team_Rank == 24, Opponent_Rank==25, numLocation==-1, Season %in% c(1989,1990,1991,2014,2015,2016))%>% select(Season, Model1_GLM_Logit, Model2_GLM_Logit, Model3_GLM_Logit, Model4_GLM_Logit, Model5_GLM_Logit, Model6_GLM_Logit, Model7_GLM_Logit, Model8_GLM_Logit)
+
+TEST<- t(TEST)
+
+TEST <- TEST[2:9,]
+
+rownames(TEST)=c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+colnames(TEST)=c("1989","1990","1991","2014","2015","2016")
+
+knitr::kable(round(TEST,3),caption="Estimated win probabilities for a Team ranked 24 playing on the road against an Opponent ranked 25 for six different seasons. Probabilities were found using GLMs with a logit link. A probability was found for each variable set.")
+```
+
+
+
+
+```{r, echo=F, fig.cap="Estimated win probabilities for the 2016 season. Probabilities were estimated using a generalized linear model (logit link) with variable set 2. The horizontal axis of the graph is the Opponent ranking, the vertical axis is the Team’s estimated win probability, and the facets are the Team ranking. The win probabilities are colored by location (from the Team’s perspective). The vertical lines in each facet are where the Opponent ranking is equal to the Team ranking. This makes it easy to see if the Team is ranked higher than the Opponent. The horizontal dashed lines are at win probability equal to 0.50. This makes it easy to see if the Team is favored (a win probability higher than 0.50) or if the Opponent is favored (a Team win probability less than 0.50)."}
+all_predictions %>% filter(Season==2016) %>% ggplot(aes(x=Opponent_Rank, y=Model2_GLM_Logit, color=as.factor(numLocation)))+geom_line(size=.1)+geom_point(size=.1)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=xints), data=vlines, size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+
+```
+
+To assess the GLMs, we compared AIC values and the negative log likelihood losses. For each season, variable set 2 had the lowest AIC. The AIC values for the 2012 through 2016 season are displayed in Table 5. In addition to comparing AICs, we also compared negative log likelihood losses. Because each variable set is used to construct probability estimates for each season, we can compare the estimated win probabilities to what actually happened during that season to assess which GLM performed the best. The equation used for calculating the negative log likelihood loss is $-1 \cdot \sum_{i=1}^n[Y_i \cdot \log(\hat{\pi}_i)+(1-Y_i) \cdot \log(1-\hat{\pi}_i)]$, where $Y_i$ represents the results of game $i$ ($0$: loss, $1$: win) and $\hat{\pi}_i$ represents the estimated win probability for game $i$. Low win probabilities for losses and high win probabilities for wins make small contributions to the loss, while high win probabilities for losses and low probabilities for wins make large contributions to the loss. We calculated the negative log likelihood loss for each variable set for each season, and then summed over all seasons to get a single loss value for each variable set. The sums of the negative log likelihood losses can be found in Table 6. Variable set 2 had the lowest sum of losses.
+
+With the lowest AIC and the lowest sum of losses, it seems that using variable set 2 provides the best estimates of win probabilities when using a GLM with a logit link. This means the "best" model uses the game location ($X_1$), the difference in Team and Opponent ranks ($X_2$), the interaction between location and average of the Team and Opponent ranks ($X_1 \cdot X_3$), and the interaction between difference in Team and Opponent ranks and the average of the Team and Opponent ranks ($X_2 \cdot X_3$). The parameter estimates did not show a lot of variation across seasons. For the 2016 model, the estimate for $\beta_1$ is $0.746$ (*p*-value of .0000107), the estimate for $\beta_2$ is $-0.131$ (*p*-value of .0000000296), the estimate for $\beta_3$ is $-0.028$ (*p*-value of .02129), and the estimate for $\beta_4$ is $.0051$ (*p*-value of .00368). 
+
+In context, this means as the difference in ranks increases by one (holding location and average rank constant), the odds of winning decreases by $\exp(-.131 + .0051 \cdot X_3)$. We can see this in Figure 4, where win probabilities decreases as the difference in ranks increases. From this interpretation, we can see that the difference in ranks has more of an effect when the average rank is lower. We see this in Figure 4, where an increase in difference in ranks causes the predicted win probabilities to decrease more rapidly when the average rank is 5, compared to average ranks of 10, 15, or 20. This means that the difference between a Team ranked 4 and a Team ranked 6 (difference in ranks equal to 2, average rank equal to 5) has more of an impact on win probability than the difference between a Team ranked 19 and a Team ranked 21 (difference in ranks equal to 2, average rank equal to 20).
+
+As average rank increases (holding location and difference in ranks constant), the estimated probability of winning gets closer to 0.50. We can see this in Figure 4 by looking at the difference in line heights between the four facets. When holding the difference in ranks and location constant, the estimated win probabilities for games with higher average ranks are closer to 0.50. This tells us that when holding location and difference in ranks constant, games with higher average ranks are more difficult to predict (win probabilities closer to 0.50).
+
+As location changes from away to neutral (meaning $X_1$ changes from $-1$ to 0) or from neutral to home (meaning $X_1$ changes from 0 to 1) while holding Team and Opponent rank constant, the odds of winning increases by $\exp(.746 - .028 \cdot X_3)$. This tells us that a Team's win probability is at its highest when playing at home and its lowest when playing on the road (which is to be expected). This also tells us that the home field advantage is greater for lower ranked teams. As the average rank increases, the improved probability of winning due to location (moving the game from an away to a neutral site or from a neutral site to home) gets smaller. We see this in Figure 4, where the distance between the blue, green, and red lines is greater for the lower average ranks. 
+
+
+
+```{r, echo=F, fig.cap="Estimated win probabilities for the 2016 season. Probabilities were estimated using a generalized linear model (logit link) with variable set 2. The horizontal axis of the graph is the difference in ranks (taking Team rank minus Opponent rank), the vertical axis is the Team's estimated win probability, and the facets are four different values of the average rank (values of 5, 10, 15, and 20 are shown). The win probabilities are colored by location (from the Team’s perspective). The horizontal dashed lines are at win probability equal to 0.50. This makes it easy to see if the Team is favored (a win probability higher than 0.50) or if the Opponent is favored (a Team win probability less than 0.50)."}
+
+figure4 <- all_predictions %>% filter(Season==2016, Avg_Rank %in% c(5,10,15,20), Diff_Ranks %in%c(-8:8)) %>% select(Team_Rank, Opponent_Rank, numLocation, Avg_Rank, Diff_Ranks, Model2_GLM_Logit) 
+
+figure4$Avg_Rank = paste("Average Rank: ",figure4$Avg_Rank, sep = "")
+
+figure4$Avg_Rank_f = factor(figure4$Avg_Rank, levels = c("Average Rank: 5","Average Rank: 10","Average Rank: 15","Average Rank: 20"))
+
+figure4 %>% ggplot(aes(x=Diff_Ranks, y=Model2_GLM_Logit, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Win Probability")+xlab("Difference in Ranks")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+facet_wrap(~Avg_Rank_f)+theme(legend.position = "bottom")
+
+
+```
+
+
+
+
+```{r, echo=F, results='asis'}
+logit_aic <- logit_aic[,c(1,25:29)]
+
+logit_aic$X = c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+
+colnames(logit_aic) = c("Variable Set","2012 AICs","2013 AICs","2014 AICs","2015 AICs","2016 AICs")
+
+knitr::kable(logit_aic, caption="AIC values for each variable set for the 2012-2016 seasons. Variable set 2 had the lowest AIC for each season.", align = rep("c",6))
+
+
+```
+
+```{r, echo= F, results='asis'}
+logit_loss <- gather(logit_loss, key=Season, value=Loss, 2:29)
+
+logit_loss_output <- logit_loss %>% group_by(X) %>% summarise(Losses = sum(Loss))
+
+logit_loss_output = data.frame(logit_loss_output)
+
+logit_loss_output$Losses = round(-1*logit_loss_output$Losses,1)
+
+logit_loss_output <- logit_loss_output %>% arrange(Losses)
+
+colnames(logit_loss_output) = c("Variable Set","Sum of Losses")
+
+
+logit_loss_output$`Variable Set` = c("Set 2","Set 1","Set 6","Set 5","Set 4","Set 3","Set 8","Set 7")
+
+knitr::kable(logit_loss_output, caption="Sum of negative log likelihood losses for each parameter set, sorted by the sum of losses.", align = c("c","c"))
+```
+
+## GLM Using Probit Link
+\newpage
+
+
+$$ Y_i = \left\{
+        \begin{array}{ll}
+            0 & \quad \text{Team lost game }i\\
+            1 & \quad \text{Team won game }i
+        \end{array}
+    \right. $$
+$$X_{1,i}: \text{Location of Game $i$, $-1$ for away, $0$ for neutral, and $1$ for home} $$
+$$X_{2,i}: \text{Difference in Team and Opponent Rank (Team minus Opponent)} $$
+$$X_{3,i}: \text{Average of Team and Opponent Rank} $$
+$$ P ( Y_i = 1| X_{1,i}, X_{2,i}, X_{3,i} ) = \pi ( X_{1,i}, X_{2,i}, X_{3,i} ) $$
+$$ Y_i| X_{1,i}, X_{2,i}, X_{3,i} \sim  {\rm Bernoulli} ( \pi ( X_{1,i}, X_{2,i}, X_{3,i} ) )  $$
+$$ \Phi^{-1}[\pi ( X_{1,i}, X_{2,i}, X_{3,i} )] =  \beta_1 \cdot X_{1,i} + \beta_2 \cdot X_{2,i} + \beta_3 \cdot X_{1,i} \cdot X_{3,i} + \beta_4 \cdot X_{2,i} \cdot X_{3,i} + \beta_5 \cdot X_{1,i} \cdot X_{2,i}$$
+$$\pi ( X_{1,i}, X_{2,i}, X_{3,i} ) = \Phi (\beta_1 \cdot X_{1,i} + \beta_2 \cdot X_{2,i} + \beta_3 \cdot X_{1,i} \cdot X_{3,i} + \beta_4 \cdot X_{2,i} \cdot X_{3,i} + \beta_5 \cdot X_{1,i} \cdot X_{2,i}) $$
+
+
+Constructing a GLM using a probit link still retains the necessary "symmetry" property. To see this, we can return to the example from before. Suppose we want to estimate the win probability of a Team ranked 3rd playing at home against an Opponent ranked 5th. In this example, $X_1 = 1$, $X_2 = 3-5 = -2$, and $X_3 = \frac{3+5}{2} = 4$. Therefore, we would estimate the win probability of the Team to be
+$$\pi ( X_1=1, X_2=-2, X_3=4 ) =  \Phi (\beta_1 \cdot 1 + \beta_2 \cdot -2 + \beta_3 \cdot 4 + \beta_4 \cdot -8 + \beta_5 \cdot -2) \text{ .}$$
+
+$\pi ( X_1=1, X_2=-2, X_3=4 )$ gives the Team's win probability for the given game and $1 -\pi ( X_1=1, X_2=-2, X_3=4 )$ gives the *Opponent's* win probability for the given game. By constructing the model with a probit link instead of a logit link, we still guarantee that $1 -\pi ( X_1=1, X_2=-2, X_3=4 ) = \pi (X_1=-1, X_2=2, X_3=4 )$. 
+
+A probit link also still retains the property of neither team being favored if two evenly ranked teams were playing each other at a neutral site. If a Team had the same rank as its Opponent and was playing at a neutral site, $X_1 = 0$ and $X_2=0$, forcing the estimated win probability to be
+$$\pi ( X_1=0, X_2=0, X_3 ) = \Phi (\beta_1 \cdot 0 + \beta_2 \cdot 0 + \beta_3 \cdot 0 + \beta_4 \cdot 0 + \beta_5 \cdot 0) $$
+$$= \Phi(0) $$
+$$= 0.50\text{ .}$$ 
+
+```{r}
+all_predictions %>% filter(Season==2016) %>% ggplot(aes(x=Opponent_Rank, y=Model2_GLM_Probit, color=as.factor(numLocation)))+geom_line(size=.1)+geom_point(size=.1)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=xints), data=vlines, size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+```
+\newpage
+```{r, echo=F, results='asis'}
+TEST<-all_predictions %>% filter(Team_Rank == 1, Opponent_Rank==25, numLocation==1, Season %in% c(1989,1990,1991,2014,2015,2016))%>% select(Season, Model1_GLM_Probit, Model2_GLM_Probit, Model3_GLM_Probit, Model4_GLM_Probit, Model5_GLM_Probit, Model6_GLM_Probit, Model7_GLM_Probit, Model8_GLM_Probit)
+
+TEST<- t(TEST)
+
+TEST <- TEST[2:9,]
+
+rownames(TEST)=c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+colnames(TEST)=c("1989","1990","1991","2014","2015","2016")
+
+knitr::kable(round(TEST,3),caption="Estimated win probabilities for a number 1 ranked Team playing at home versus an Opponent ranked 25 for six different seasons.")
+```
+
+
+
+
+```{r, echo = F, results='asis'}
+probit_aic <- probit_aic[,c(1,25:29)]
+
+probit_aic$X = c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+
+colnames(probit_aic) = c("Variable Set","2012 AICs","2013 AICs","2014 AICs","2015 AICs","2016 AICs")
+
+knitr::kable(probit_aic, caption="AIC values for each variable set for the 2012-2016 seasons.", align = rep("c",6))
+
+```
+
+
+```{r, echo=F, results='asis'}
+logitval <- logit_aic[2,]
+logitval$`Variable Set` = "Logit Link"
+
+probitval <- probit_aic[2,]
+
+probitval$'Variable Set' = "Probit Link"
+
+aiccompare <- rbind(logitval, probitval)
+
+
+colnames(aiccompare)[1] = "Link Used"
+rownames(aiccompare)=NULL
+
+knitr::kable(aiccompare, caption= "Comparing AICs for variable set 2 between a GLM using a logit link and a GLM using a probit link.", align = rep("c",6))
+```
+
+
+```{r, echo= F, results='asis'}
+probit_loss <- gather(probit_loss, key=Season, value=Loss, 2:29)
+
+probit_loss_output <- probit_loss %>% group_by(X) %>% summarise(Losses = sum(Loss))
+
+probit_loss_output = data.frame(probit_loss_output)
+
+probit_loss_output$Losses = -1*probit_loss_output$Losses
+
+probit_loss_output <- probit_loss_output %>% arrange(Losses)
+
+colnames(probit_loss_output) = c("Variable Set","Probit Link Losses")
+
+colnames(logit_loss_output)[2] = "Logit Link Losses"
+
+
+probit_loss_output$`Variable Set` = c("Set 2","Set 1","Set 6","Set 5","Set 4","Set 3","Set 8","Set 7")
+
+loss_compare <- bind_cols(probit_loss_output,logit_loss_output)
+
+loss_compare <- loss_compare[,-3]
+
+loss_compare[,2:3] <- round(loss_compare[,2:3],1)
+
+knitr::kable(loss_compare, caption="Comparing the sum of losses between GLMs that use a probit link and GLMs that use a logit link. Variable set 2 resulted in the lowest loss for both links.", align = rep("c",3))
+
+
+```
+
+
+# Random Forest Method
+
+
+
+
+
+$$ -1 \cdot \sum_{i=1}^n[Y_i \cdot \log(OOB_i)+(1-Y_i) \cdot \log(1-OOB_i)] \text{ .}$$
+
+
+
+```{r, echo=F, results='asis'}
+
+output_OOBLOSS<- OOB_Loss_Random_Forests %>% filter(Model=="Model1") %>% select(mtry, nodesize,X2016)
+
+colnames(output_OOBLOSS) = c("mtry","nodesize","OOB Loss")
+
+rownames(output_OOBLOSS) = NULL
+
+output_OOBLOSS$`OOB Loss` = round(-1 *output_OOBLOSS$`OOB Loss`,1)
+
+output_OOBLOSS <- output_OOBLOSS %>% arrange(`OOB Loss`)
+
+
+knitr::kable(output_OOBLOSS, caption= "OOB losses for random forests constructed using variable set 1 for the 2016 season.", align = rep("c",3))
+```
+
+
+
+
+```{r, echo=F, results='asis'}
+predict_comparisons_25v5h<-all_predictions %>% filter(Team_Rank == 25, Opponent_Rank==5, numLocation==1, Season == 2016) %>% select(-c(1:7))
+
+predict_comparisons_25v5h <- gather(predict_comparisons_25v5h,key = Model, value=Probability, 1:32)
+
+predict_comparisons_25v5h<-predict_comparisons_25v5h[1:24,]
+
+predict_comparisons_25v5h$Method = c(rep("GLM Logit",8), rep("GLM Probit",8),rep("Random Forest",8))
+
+predict_comparisons_25v5h$`Variable Set` = c(rep(c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8"),3))
+
+predict_comparisons_25v5h <- predict_comparisons_25v5h[,c(4,3,2)]
+
+predict_output<- spread(predict_comparisons_25v5h, key = Method, value = Probability)
+
+predict_output$`GLM Logit`= round(predict_output$`GLM Logit`,3)
+predict_output$`GLM Probit`=round(predict_output$`GLM Probit`,3)
+predict_output$`Random Forest` = round(predict_output$`Random Forest`,3)
+
+knitr::kable(predict_output, caption = "Estimated win probabilities for a Team ranked 25 playing at home against an Opponent ranked 5 in the 2016 season.", align = rep("c",4))
+```
+
+
+
+
+
+
+```{r, echo=F, fig.cap="Estimated win probabilities for the 2016 season. Estimations were found using a random forest with variable set 2. The horizontal axis of the graph is the Opponent ranking, the vertical axis is the Team’s estimated win probability, and the facets are the Team ranking. The win probabilities are colored by location (from the Team’s perspective). The vertical lines in each facet are where the Opponent ranking is equal to the Team ranking. This makes it easy to see if the Team is ranked higher than the Opponent. The horizontal dashed lines are at win probability equal to 0.50. This makes it easy to see if the Team is favored (a win probability higher than 0.50) or if the Opponent is favored (a Team win probability less than 0.50).", fig.height=6}
+
+all_predictions %>% filter(Season==2016, Team_Rank==1) %>% ggplot(aes(x=Opponent_Rank, y=Model2_RF, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=1), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+
+all_predictions %>% filter(Season==2016, Team_Rank==12) %>% ggplot(aes(x=Opponent_Rank, y=Model2_RF, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=12), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+all_predictions %>% filter(Season==2016, Team_Rank==25) %>% ggplot(aes(x=Opponent_Rank, y=Model2_RF, color=as.factor(numLocation)))+geom_line(size=.1)+geom_point(size=.1)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=25), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+
+all_predictions %>% filter(Season==2016) %>% ggplot(aes(x=Opponent_Rank, y=Model2_RF, color=as.factor(numLocation)))+geom_line(size=.1)+geom_point(size=.1)+ylab("Win Probability")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = .5, lty=2)+geom_vline(aes(xintercept=xints), data=vlines,size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+```
+
+To assess the random forest estimations, we compared negative log likelihood losses. As before, the equation used for calculating the negative log likelihood loss is $-1 \cdot \sum_{i=1}^n[Y_i \cdot \log(\hat{\pi}_i)+(1-Y_i) \cdot \log(1-\hat{\pi}_i)]$, where $Y_i$ represents the results of game $i$ ($0$: loss, $1$: win) and $\hat{\pi}_i$ represents the estimated win probability for game $i$. We calculated the negative log likelihood loss for each variable set for each season, and then summed over all seasons to get a single loss value for each variable set. The sums of the negative log likelihood losses for the random forest estimations, along with the sums of the losses for the GLMs, can be found in Table 13. Variable set 6, which included location, difference in ranks, and the interaction between difference in ranks and average rank, resulted in the lowest loss for the random forests. This is different than the GLMs, which had the lowest loss when using variable set 2. It is also interesting to note that the lowest random forest loss is still higher than the highest GLM loss. This seems to imply that using a GLM will result in better predictions than a random forest.
+
+
+```{r, echo=F, results='asis'}
+rf_loss <- gather(rf_ss_loss, key=Season, value=Loss, 2:29)
+
+rf_loss_output <- rf_loss %>% group_by(X) %>% summarise(Losses = sum(Loss))
+
+rf_loss_output = data.frame(rf_loss_output)
+
+rf_loss_output$Losses = round(-1*rf_loss_output$Losses,1)
+
+colnames(rf_loss_output) = c("Variable Set","Random Forest Losses")
+
+rf_loss_output$`Variable Set` = c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+
+loss_compare <- loss_compare %>% arrange(`Variable Set`)
+
+loss_compare <- bind_cols(loss_compare, rf_loss_output)
+
+loss_compare <- loss_compare[,-4]
+
+knitr::kable(loss_compare, caption="Comparing the sum of losses between GLMs that use a probit link, GLMs that use a logit link, and random forests. Variable set 2 resulted in the lowest loss for the GLMs, while variable set 6 resulted in the lowest loss for the random forest estimations.", align = rep("c",4))
+
+```
+
+
+# Multiple Linear Regression Method
+
+In addition to using GLMs and random forests to estimate win probabilities, we also used multiple linear regression (MLR) models to predict point differentials instead of estimating win probabilities. The predicted point differentials could then be modified to predict a winner, in that a positive predicted point differential indicates a team is predicted to win and a negative predicted point differential indicates a team is predicted to lose. The MLR models were structured in the following way:
+\newpage
+
+$$ Y_i = \text{Points scored in game } i - \text{Opponent points scored in game }i $$
+$$X_{1,i}: \text{Location of game i, -1 for away, 0 for neutral, and 1 for home} $$
+$$X_{2,i}: \text{Difference in Team and Opponent Rank (Team minus Opponent)} $$
+$$X_{3,i}: \text{Average of Team and Opponent Rank} $$
+$$Y_i = \beta_1 \cdot X_{1,i} + \beta_2 \cdot X_{2,i} + \beta_3 \cdot X_{1,i} \cdot X_{3,i} + \beta_4 \cdot X_{2,i} \cdot X_{3,i} + \beta_5 \cdot X_{1,i} \cdot X_{2,i} + \epsilon_i $$
+$$\epsilon_i \sim N(0,\sigma^2_e) \text{ .}$$
+
+
+
+
+```{r, echo=F, results='asis'}
+predict_output<- predict_output
+
+pointdf_predict<-all_predictions %>% filter(Team_Rank == 25, Opponent_Rank==5, numLocation==1, Season == 2016) %>% select(c(32:39))
+
+pointdf_predict <- t(pointdf_predict)
+
+rownames(pointdf_predict) <- NULL
+
+colnames(pointdf_predict) <- c("MLR")
+
+predict_output <- cbind(predict_output, pointdf_predict)
+
+predict_output$MLR = round(predict_output$MLR,2)
+
+knitr::kable(predict_output, caption = "Win probability estimates and point differential predictions for a Team ranked 25 playing at home against an Opponent ranked 5 in the 2016 season.", align = rep("c",5))
+```
+
+
+```{r, echo=F, fig.cap="Predicted point differentials for the 2016 season. Predictions were found using a MLR model with variable set 2. The horizontal axis of the graph is the Opponent ranking, the vertical axis is the predicted point differential, and the facets are the Team ranking. The predictions are colored by location (from the Team’s perspective). The vertical lines in each facet are where the Opponent ranking is equal to the Team ranking. This makes it easy to see if the Team is ranked higher than the Opponent. The horizontal dashed lines are at predicted point differential equal to 0. This makes it easy to see if the Team is favored (a predicted point differential higher than 0) or if the Opponent is favored (a predicted point differential lower than 0).", fig.height=6}
+
+all_predictions %>% filter(Season==2016, Team_Rank==1) %>% ggplot(aes(x=Opponent_Rank, y=Model2_LM, color=as.factor(numLocation)))+geom_line(size=.1)+geom_point(size=.1)+ylab("Predicted Point Differential")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = 0, lty=2)+geom_vline(aes(xintercept=1), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+all_predictions %>% filter(Season==2016, Team_Rank==25) %>% ggplot(aes(x=Opponent_Rank, y=Model2_LM, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Predicted Point Differential")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = 0, lty=2)+geom_vline(aes(xintercept=25), size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+
+
+all_predictions %>% filter(Season==2016) %>% ggplot(aes(x=Opponent_Rank, y=Model2_LM, color=as.factor(numLocation)))+geom_line(size=1)+geom_point(size=2)+ylab("Predicted Point Differential")+xlab("Opponent Rank")+labs(title="")+scale_color_discrete(name="Location",breaks=c("-1","0","1"), labels=c("Away","Neutral","Home"))+geom_hline(yintercept = 0, lty=2)+geom_vline(aes(xintercept=xints), data=vlines, size=.5)+facet_wrap(~Team_Rank)+theme(legend.position = "bottom")
+```
+
+
+
+We computed the mean square error (MSE) to assess our MLR models by comparing the predicted point differentials to what actually happened during that season. The equation used for computing the MSE was $\frac{1}{n} \cdot \sum_{i=1}^n ( \hat{Y_i}-Y_i)^2$, where $Y_i$ represents the point differential of game $i$, $\hat{Y_i}$ represents the predicted point differential for game $i$, and $n$ represents the number of games in a given season. The MSEs for five individual seasons are displayed in Table 15. For each variable set, we calculated the MSE for each season and then found a weighted average (weighted by number of games in a season) of the MSEs across all seasons. The averages of the MSEs can be seen in Table 16. Variable set 8, which included just location and difference in ranks, resulted in the lowest average MSE over all seasons. This is different than with the GLMs and random forests, where the "best" variable sets were sets 2 and 6.
+
+```{r, echo=F, results='asis'}
+single_season_mses<- linear_mse[,c(1,49,51,53,55,57)]
+
+colnames(single_season_mses)= c("Variable Set","2012 MSE","2013 MSE","2014 MSE","2015 MSE","2016 MSE")
+
+single_season_mses$`Variable Set`=c("Set 1","Set 2","Set 3","Set 4","Set 5", "Set 6","Set 7","Set 8")
+
+single_season_mses$`2012 MSE` = round(single_season_mses$`2012 MSE`,1)
+single_season_mses$`2013 MSE` = round(single_season_mses$`2013 MSE`,1)
+single_season_mses$`2014 MSE` = round(single_season_mses$`2014 MSE`,1)
+single_season_mses$`2015 MSE` = round(single_season_mses$`2015 MSE`,1)
+single_season_mses$`2016 MSE` = round(single_season_mses$`2016 MSE`,1)
+
+knitr::kable(single_season_mses, caption="Comparing MSEs for the eight variable sets for the 2012 through 2016 seasons.", align = rep("c",6))
+```
+
+
+```{r,echo=F, results='asis'}
+
+sum_mse <- linear_mse[,seq(from=1,to=57, by=2)]
+
+
+TEST2 <- data.frame(season_specific_predictions %>% group_by(Season) %>% summarise(GameNum = length(Season)))
+
+TEST3 <- gather(sum_mse, key=Season, value=MSE, 2:29)
+
+TEST3$Season = rep(1989:2016, each=8)
+
+TEST3$GameNum = rep(TEST2$GameNum, each=8)
+
+TEST4 <- TEST3 %>% group_by(X) %>% summarise(weighted_avg = sum((GameNum * MSE))/1494) %>% mutate(weighted_avg = round(weighted_avg,2))
+
+sum_mse_output = data.frame(TEST4)
+
+colnames(sum_mse_output) = c("Variable Set","Average of MSEs")
+
+sum_mse_output$`Variable Set` = c("Set 1","Set 2","Set 3","Set 4","Set 5","Set 6","Set 7","Set 8")
+
+knitr::kable(sum_mse_output, caption="MSEs for each variable set, averaged over all seasons.", align =rep("c",2))
+```
+
+
+
+
+
+# Comparing the 32 Methods
+
+## Methods Summary
+
+
+
+## Comparing Prediction Accuracy
+
+
+
+```{r, echo=F, results='asis'}
+
+example1_predict <- season_specific_predictions %>% filter(Season==2016)
+
+example1_predict <- example1_predict[c(1,11,23),c(2:42)]
+
+example1_predict <- example1_predict[,c(2,3,7,4,8,10:41)]
+
+example1_predict <- t(example1_predict)
+
+colnames(example1_predict)= c("Game 1","Game 2","Game 3")
+
+rownames(example1_predict)= c("Team Rank","Opponent Rank", "Location", "Result","Point Differential","Parameter Set 1 GLM Logit","Parameter Set 2 GLM Logit","Parameter Set 3 GLM Logit","Parameter Set 4 GLM Logit","Parameter Set 5 GLM Logit","Parameter Set 6 GLM Logit","Parameter Set 7 GLM Logit","Parameter Set 8 GLM Logit","Parameter Set 1 GLM Probit","Parameter Set 2 GLM Probit","Parameter Set 3 GLM Probit","Parameter Set 4 GLM Probit","Parameter Set 5 GLM Probit","Parameter Set 6 GLM Probit","Parameter Set 7 GLM Probit","Parameter Set 8 GLM Probit","Parameter Set 1 RF","Parameter Set 2 RF","Parameter Set 3 RF","Parameter Set 4 RF","Parameter Set 5 RF","Parameter Set 6 RF","Parameter Set 7 RF","Parameter Set 8 RF","Parameter Set 1 MLR","Parameter Set 2 MLR","Parameter Set 3 MLR","Parameter Set 4 MLR","Parameter Set 5 MLR","Parameter Set 6 MLR","Parameter Set 7 MLR","Parameter Set 8 MLR")
+
+GAME_DISPLAY <- example1_predict[c(1:5),]
+
+GAME_DISPLAY[3,] = c("Neutral", "Neutral","Home")
+
+knitr::kable(GAME_DISPLAY, caption="Three example games from the 2016 season.", align = rep("c",4))
+```
+
+```{r, echo=F, results='asis'}
+
+GAME_PREDICTIONS <- example1_predict[c(6:37),]
+
+GAME_PREDICTIONS <- data.frame(GAME_PREDICTIONS)
+
+GAME_PREDICTIONS$Method = rep(c("GLM Logit","GLM Probit","Random Forest","MLR"), each=8)
+
+GAME_PREDICTIONS$`Variable Set` = c(rep(1:8,4))
+
+rownames(GAME_PREDICTIONS)=NULL
+
+GAME_PREDICTIONS <- GAME_PREDICTIONS[,c(4,5,1,2,3)]
+
+GAME_PREDICTIONS$`Game 1` = round(as.numeric(paste(GAME_PREDICTIONS$Game.1)),3)
+
+GAME_PREDICTIONS$`Game 2` = round(as.numeric(paste(GAME_PREDICTIONS$Game.2)),3)
+
+GAME_PREDICTIONS$`Game 3` = round(as.numeric(paste(GAME_PREDICTIONS$Game.3)),3)
+
+GAME_PREDICTIONS <- GAME_PREDICTIONS[,c(1,2,6,7,8)]
+
+knitr::kable(GAME_PREDICTIONS, caption="Predictions by each of the 32 methods for the three games described in Table 17.", align=c("l","c","c","c","c"))
+
+```
+
+
+
+```{r, echo=F, results='asis'}
+season_specific_winner_predictions <- season_specific_predictions
+
+replacements <- season_specific_predictions[,35:42]
+
+replacements[replacements>0] =1
+
+replacements[replacements<0] = 0
+
+season_specific_winner_predictions[,35:42] = replacements
+
+tall_form_predictions <- season_specific_winner_predictions %>% gather(Model, Prediction, 11:42)
+
+
+accuracies<- data.frame(tall_form_predictions %>% group_by(Model, Season) %>% summarise(Accuracy = (sum(round(Prediction)==Team_Win)/ length(Team_Win)))) %>% mutate(Accuracy = round(Accuracy,4))
+
+
+output_accuracies <- accuracies %>% filter(Season %in% c(2014,2015,2016))
+
+output_accuracies <- output_accuracies %>% spread(key=Season, value=Accuracy)
+
+output_accuracies$Model = c("Parameter Set 1 GLM Logit","Parameter Set 2 GLM Logit","Parameter Set 3 GLM Logit","Parameter Set 4 GLM Logit","Parameter Set 5 GLM Logit","Parameter Set 6 GLM Logit","Parameter Set 7 GLM Logit","Parameter Set 8 GLM Logit","Parameter Set 1 GLM Probit","Parameter Set 2 GLM Probit","Parameter Set 3 GLM Probit","Parameter Set 4 GLM Probit","Parameter Set 5 GLM Probit","Parameter Set 6 GLM Probit","Parameter Set 7 GLM Probit","Parameter Set 8 GLM Probit","Parameter Set 1 RF","Parameter Set 2 RF","Parameter Set 3 RF","Parameter Set 4 RF","Parameter Set 5 RF","Parameter Set 6 RF","Parameter Set 7 RF","Parameter Set 8 RF","Parameter Set 1 MLR","Parameter Set 2 MLR","Parameter Set 3 MLR","Parameter Set 4 MLR","Parameter Set 5 MLR","Parameter Set 6 MLR","Parameter Set 7 MLR","Parameter Set 8 MLR")
+
+colnames(output_accuracies) = c("Model","2014 Accuracy","2015 Accuracy","2016 Accuracy")
+
+output_accuracies$Method = GAME_PREDICTIONS$Method
+
+output_accuracies$`Variable Set` = GAME_PREDICTIONS$`Variable Set`
+
+output_accuracies <- output_accuracies[,c(5,6,2,3,4)]
+
+knitr::kable(output_accuracies, caption="Accuracies of each method for the 2014, 2015, and 2016 seasons. Accuracies ranged between .5344 to .6964.", align = c("l","c","c","c","c"))
+```
+
+
+```{r, echo=F, results='asis', fig.cap="Relationship between the average accuracy of our 32 methods and season."}
+
+test_accurate <- accuracies %>% group_by(Season) %>% summarise(Average_Accuracy = mean(Accuracy))
+
+test_accurate %>% ggplot(aes(x=Season, y=Average_Accuracy))+geom_point()+geom_line()+ylab("Average Accuracy")+geom_hline(yintercept=.5, lty=2)
+
+
+accuracies %>% ggplot(aes(x=Season, y=Accuracy, color=Model))+geom_line()+ylab("Accuracy")+theme(legend.position = "none")+geom_hline(yintercept = .5, lty=2)
+
+```
+
+```{r,echo=F, results='asis'}
+
+totalAccuracies <- data.frame(tall_form_predictions %>% group_by(Model) %>% summarise(Accuracy = sum(round(Prediction)==Team_Win)/ length(Team_Win))) %>% mutate(Accuracy = round(Accuracy,4))
+
+totalAccuracies$Method =GAME_PREDICTIONS$Method
+
+totalAccuracies$`Variable Set` = GAME_PREDICTIONS$`Variable Set`
+
+totalAccuracies <- totalAccuracies[,c(3,4,2)]
+
+totalAccuracies<- totalAccuracies %>% arrange(-Accuracy)
+
+colnames(totalAccuracies) = c("Method","Variable Set","Total Accuracy")
+
+knitr::kable(totalAccuracies, caption= "Total Accuracies for each of the 32 Methods.", align=c("l","c","c"))
+```
+
+
+
+
+```{r, echo=F, results='asis', fig.cap="Relationship between estimated win probability and actual winning percentage for predictions generated by the GLM probit method using variable set 7. The dashed red line is along the line where estimated win probability is equal to actual winning percentage."}
+tall_form_predictions$Binning= findInterval(tall_form_predictions$Prediction, seq(0,1,by=.05))/21
+
+
+TEST2 <- tall_form_predictions %>% group_by(Model,Binning) %>% summarise(Win_PCT = sum(Team_Win)/ length(Team_Win), X_Point = mean(Prediction))
+
+
+TEST2 %>% filter(Model =="Model7_GLM_Probit") %>% ggplot(aes(x=X_Point, y=100*Win_PCT))+geom_line(size=1)+geom_abline(slope=100, intercept = 0, color="red", lty=2, size=1)+xlim(0,1)+ylim(0,100)+xlab("Estimated Win Probability")+ylab("Winning Percentage")
+
+```
+
+
+
+Accuracy Stuff:
+
+
+```{r}
+season_specific_predictions %>% ggplot(aes(x=Model2_GLM_Logit))+geom_histogram(bins=60)+xlab("GLM Logit with Varable Set 2 Probabilities")+ylim(c(0,80))+xlim(.1,.9)
+
+season_specific_predictions %>% ggplot(aes(x=Model7_GLM_Probit))+geom_histogram(bins=60)+xlab("GLM Probit with Varable Set 7 Probabilities")+ylim(c(0,80))+xlim(.1,.9)
+
+
+season_specific_predictions %>% ggplot(aes(x=Model2_GLM_Logit, y=Model7_GLM_Probit))+geom_point()+xlab("GLM Logit with Varable Set 2 Probabilities")+ylab("GLM Probit with Varable Set 7 Probabilities")+xlim(0,1)+ylim(0,1)+geom_hline(yintercept=.5, color="red", lty=2, size=1)+geom_vline(xintercept = .5, color="red", lty=2, size=1)
+
+```
+
+
+
+```{r, echo=F, results='asis', fig.cap="Relationship between estimated win probability and actual winning percentage for predictions generated by the GLM logit method using variable set 2. The dashed red line is along the line where estimated win probability is equal to actual winning percentage."}
+
+TEST2 %>% filter(Model =="Model2_GLM_Logit") %>% ggplot(aes(x=X_Point, y=100*Win_PCT))+geom_line(size=1)+geom_abline(slope=100, intercept = 0, color="red", lty=2, size=1)+xlim(0,1)+ylim(0,100)+xlab("Estimated Win Probability")+ylab("Winning Percentage")
+
+```
+
+```{r, echo=F, results='asis', fig.cap="Relationship between predicted point differential and actual point differential for predictions generated by the MLR method using variable set 8. The dashed red line is along the line where predicted point differential is equal to actual point differential."}
+
+pointdiff_output <- season_specific_predictions %>% select(Score_Diff,Model8_LM)
+
+pointdiff_output %>% ggplot(aes(x=Model8_LM, y=Score_Diff))+geom_point()+geom_abline(slope=1, intercept = 0, color="red", lty=2, size=2)+xlab("Predicted Point Differential")+ylab("Actual Point Differential")
+```
+
+
+# Conclusion and Future Work
+
+
+
+
+\newpage
+
+#Appendix
+
+##Data Set Introduction
+
+
+## Total_Team_History
+
+### File Description
+
+
+### Example Graphs
+
+The Total_Team_History CSV file can be used to compare total history between teams. For example, Figure 11 compares the difference in total wins between a select number of teams. Figure 12 displays the relationship between a team's all time win total and the number of seasons the team has finished ranked in the AP Poll.
+
+```{r, echo = F, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+Total_Team_History <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Scraped_Data\\Total_Team_History.csv")
+```
+
+```{r, echo = F, warning=FALSE, message=FALSE, fig.cap="Comparing all time wins between the Nebraska, Iowa, Iowa State, Oklahoma, and Minnesota football programs."}
+
+Total_Team_History %>% filter(Team %in% c("nebraska","iowa","iowa-state","oklahoma","minnesota")) %>% ggplot(aes(x=Team, weight= Wins))+geom_bar()+ylab("Total Wins")+labs(title="")
+```
+
+
+```{r, echo = F,  fig.align='center', fig.cap="Comparing all time wins to number of seasons ranked in the Postseason AP Poll for teams active in 2016. Programs with more all time wins tend to have more seasons in which they finished ranked."}
+
+Total_Team_History %>% filter(Last_Season == 2016)%>%ggplot(aes(x=Wins, y=Number_Of_Seasons_Ranked_In_AP_Final_Poll))+geom_point()+xlab("All Time Wins")+ylab("Seasons Ranked in Postseason AP Poll")+labs(title="")
+```
+
+
+## Individual_Season_Results
+
+### File Description
+
+
+
+### Example Graphs
+
+The Individual_Season_Results CSV file has more information than the Total_Team_History file, in that the Individual_Season_Results file allows users to look at each season. For example, Figure 13 displays how Nebraska's winning percentage has varied from season to season. This data set also allows for comparing variables across multiple schools. For example, Figure 14 displays how three SEC teams' simple rating system (SRS) is related to the team's winning percentage. This data set also makes it simple to compare conferences. Figure 15 display the number of bowl wins the SEC, ACC, Big 12, Big Ten, and Pac 10/12 conferences have had per season since 2000.
+
+
+```{r, echo = F,  fig.align='center'}
+Individual_Season_Results<- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Scraped_Data\\Individual_Season_Results.csv")
+```
+```{r, echo = F,  fig.align='center', fig.cap="Nebraska winning percentage by season."}
+Individual_Season_Results %>% filter(Team =="nebraska") %>% ggplot(aes(x=Season, y = 100*Winning_Pct))+geom_point()+geom_line()+xlab("Season") + ylab("Winning Percentage") +labs(title="")
+```
+
+
+
+```{r, echo=F,  fig.align='center', fig.cap="Relationship between SRS (Simple Rating System) and winning percentage for three SEC teams (2005-2016). The teams included show how some teams often have higher SRS and winning percentages (Alabama), some teams often have lower SRS and winning percentages (Kentucky), and some teams vary dramatically in SRS and winning percentage (Auburn)."}
+
+Individual_Season_Results %>% filter(Season>2005, Team %in%c("alabama","kentucky","auburn") ) %>% ggplot(aes(x=Simple_Rating_System, y=100*Winning_Pct, color=Team))+geom_point()+xlab("Team SRS") + ylab("Winning Percentage") +labs(title="")
+
+```
+
+
+
+```{r, echo = F,  fig.align='center', fig.cap="How a conference's number of bowl wins varies from season to season. This graph seems to confirm the reputation the SEC has for being the most successful conference in bowl games (despite the sharp drop off in 2016)."}
+Individual_Season_Results %>% filter(Season>1999, Conference %in% c("SEC","Big 12", "Big Ten", "Pac-8/10/12","ACC")) %>% group_by(Season, Conference) %>% summarise(Conf_Bowl_Wins = as.numeric(sum(Bowl_Result =="Win"))) %>%
+  ggplot(aes(x=Season, y=Conf_Bowl_Wins, color= as.factor(Conference)))+geom_line()+xlab("Season")+ylab("Conference Bowl Wins")+labs(title="", color = "Conference")
+
+```
+
+
+## Season_Averages
+
+### File Description
+
+
+
+### Example Graphs
+
+The Season_Averages file gives a more detailed look at a team's season, as it provides a look at offensive and defensive averages instead of just the winning percentage or total number of wins. For example, Figure 16 shows how Oregon's defensive rushing yards per game has varied since the 1950's. One could also explore how two variables may be related to each other within a particular conference. For instance, Figure 17 shows the relationship between Pac 10/12 team's offensive passing touchdowns (per game) and offensive completion percentages since 2000. This data set makes it easy to look at how teams and conferences differ from each other and change from year to year in more detailed ways. For example, Figure 18 displays side-by-side boxplots for the average passing yards per game for teams in the ACC and the Big 12.
+
+
+```{r, echo = F,  fig.align='center'}
+Season_Averages <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Scraped_Data\\Season_Averages.csv")
+```
+```{r, echo = F,  fig.align='center', fig.cap="Oregon's defensive rushing yards per game. Something that is particularly interesting is the recent rise in rushing yards allowed by Oregon's defenses."}
+Season_Averages %>% filter(Team %in% c("oregon"), Type == "Defense") %>% ggplot(aes(x=Season, y=Rush_Yds))+geom_line()+ylab("Defensive Rushing Yards Per Game")+labs(title="")
+
+```
+
+
+
+```{r, echo = F,  fig.align='center', fig.cap="Relationship between Pac 10/12 Teams' (2000-2016) completion percentages and passing touchdowns per game. In a trend that should be expected, teams that have higher completion percentages tend to throw more touchdowns."}
+Season_Averages %>% filter(Conference == "Pac-8/10/12", Type =="Offense", Season > 1999) %>% ggplot(aes(x=Pass_Pct, y=Pass_TD))+geom_point()+xlab("Offensive Completion Percentage")+ylab("Offensive Passing Touchdowns Per Game")+labs(title="")
+
+```
+
+
+```{r, echo = F,  fig.align='center', fig.cap="This graph shows how average offensive passing yards per game differs between the ACC and Big 12, as well as how the averages have changed from season to season."}
+Season_Averages %>% filter(Season %in% c(2010:2016), Conference %in% c("Big 12","ACC"),Type == "Offense") %>%select(Season, Conference, Pass_Yds) %>%group_by(Season, Conference) %>% ggplot(aes(x=as.factor(Season), y=Pass_Yds, fill = Conference))+geom_boxplot() + xlab("Season")+ylab("Average Offensive Passing Yards per Game")+ labs(title="")
+```
+
+
+
+
+
+
+
+## Game_Results
+
+### File Description
+
+
+### Example Graphs
+
+The Game_Results CSV file gives information on every single game played by an FBS football team. This data set makes it simple to observe the distribution of points scored in various games. For example, Figure 19 shows a scatterplot of Nebraska's points scored and Nebraska's points given up in conference games since 2000. Figure 20 shows a similar graph, but compares two teams. It is also easy to look at how many points are generally needed to win a football game. Figure 21 shows what the winning percentage is for a given number of points scored in a game (since 1990). Figure 22 shows how the winning percentage by points scored can vary between conferences. It is also easy to look at what conferences records are against other conferences. For example, Figure 23 shows the SEC's winning percentage in out of conference games. Figure 24 compares the winning percentage in out of conference games between the ACC, Big 12, Big Ten, Pac 8/10/12, and SEC.
+
+
+
+```{r, echo = F,  fig.align='center', fig.cap = "Scatterplot of Nebraska's points scored and Nebraska's points given up in conference games since 2000. Points above the line signify a win (where the points scored are greater than points given up) while points below the line signify a loss. The points are colored by location."}
+
+Game_Results<- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Scraped_Data\\Game_Results.csv")
+
+Game_Results %>% filter(Team=="nebraska",Season>2009, paste(Conference) == paste(Opponent_Conference)) %>% ggplot(aes(y=Points_Scored, x=Opponent_Points_Scored, color=Location))+geom_point()+geom_abline(slope=1, intercept=0, color="Red", size=1)+xlab("Opponent Points Scored")+ylab("Points Scored")+labs(title="")
+```
+
+```{r, echo = F,  fig.align='center', fig.cap="Scatterplots of team's points scored and team's points given up in conference games since 2000. This display makes it easy to get a quick snapshot of common scores for different teams. For example, Wisconsin's defense rarely gives up more than 40 points, and most losses generally have close scores. This is different than Baylor's football team, which gives up more than 40 points quite frequently and has losses that are not always close games."}
+
+Game_Results %>% filter(Team%in%c("wisconsin","baylor"),Season>2009, paste(Conference) == paste(Opponent_Conference)) %>% ggplot(aes(y=Points_Scored, x=Opponent_Points_Scored, color=Location))+geom_point()+geom_abline(slope=1, intercept=0, color="Red", size=1)+facet_wrap(~Team)+xlab("Opponent Points Scored")+ylab("Points Scored")+labs(title="")
+```
+
+
+```{r, echo = F,  fig.align='center', fig.cap="Winning percentage by points scored in games since 1990. The general trend seems to be that teams that score less than 25 points are more likely to lose, while teams that score more than 25 points are more likely to win."}
+Game_Results %>%filter(Season>1989) %>%group_by(Points_Scored) %>% summarise(Games=length(Result),Wins = sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% ggplot(aes(x=Points_Scored, y=100*WinPct))+geom_line()+xlab("Points Scored")+ylab("Winning Percentage")+labs(title="")
+```
+
+
+```{r, echo = F,  fig.align='center', fig.cap="Winning percentage by points scored for ACC, Big 12, and SEC teams since 1990."}
+Game_Results %>% filter(Season>1989) %>% group_by(Points_Scored, Conference) %>% summarise(Games=length(Result),Wins = sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% filter(Conference %in% c("ACC","Big 12","SEC"))%>% ggplot(aes(x=Points_Scored, y=100*WinPct))+geom_line()+facet_wrap(~Conference)+xlab("Points Scored")+ylab("Winning Percentage")+labs(title="")
+```
+
+```{r, echo = F,  fig.align='center', fig.cap="SEC winning percentage in non-conference games. This graph shows that the SEC has had a winning record (a winning percentage above 50 percent) in non-conference games over the past ten seasons, with a fairly sharp decline in the 2016 season."}
+
+Game_Results %>% filter(Conference == "SEC", Season > 2006, Opponent_Conference != "SEC") %>% group_by(Season) %>% summarise(Games=length(Result), Wins=sum(Result=="Win")) %>% mutate(WinPct= Wins/Games) %>% ggplot(aes(x=Season, y=100*WinPct))+geom_line()+ylim(c(50,100))+xlab("Season")+ylab("Winning Percentage")+labs(title="")
+```
+
+```{r, echo = F,  fig.align='center', fig.cap="Comparing conference winning percentages in non-conference games. As seen in this graph, the SEC has had the best winning percentage in non-conference games except for two seasons: 2011 (when the Big 12 had the best winning percentage) and 2016 (when the ACC had the best winning percentage)."}
+
+Game_Results %>% filter(Conference %in% c("SEC","Big Ten","ACC","Pac-8/10/12","Big 12"), Season > 2006, paste(Opponent_Conference) != paste(Conference)) %>% group_by(Season, Conference) %>% summarise(Games=length(Result), Wins=sum(Result=="Win")) %>% mutate(WinPct= Wins/Games) %>% ggplot(aes(x=Season, y=100*WinPct, color=Conference))+geom_line()+xlab("Season")+ylab("Winning Percentage")+labs(title="")
+```
+
+
+## Game_Logs
+
+### File Description
+
+
+### Example Graphs
+
+The Game_Logs data set allows for a more detailed look at each individual game. This allows for more detailed visualizations. One of the easier things to visualize is how certain variables may influence a team's winning percentage. Figure 25 shows how winning percentage varies by penalty yards, Figure 26 shows how winning percentage varies by turnover margin, and Figure 27 shows how winning percentage varies by offensive yards per play. Another interesting analysis someone can do is look at hexagonal heatmaps to observe the relationship between variables. For instance, Figure 28 shows the relationship between offensive yards per play and points scored. It is also possible to look at the relationship between variables across weeks. As an example, Figure 29 shows the relationship between a defense's yards given up per rush and the previous week's rushing attempts against that defense.
+
+
+```{r, echo = F,  fig.align='center'}
+Game_Logs <- read.csv("C:\\Users\\Ryan\\Desktop\\CC Writeup\\CSV_Files\\Scraped_Data\\Game_Logs.csv")
+```
+```{r, echo = F,  fig.align='center', fig.cap="A scatterplot displaying how a team's penalty yards is related to winning percentage. It is not surprising that as teams gain more yards via penalty, the winning percentage increases. What is surprising is how flat the relationship appears to be (gaining 125 yards via penalty does not seem to drastically increase winning percentage from gaining only 50 yards via penalty)."}
+Game_Logs %>% group_by(Penalty_Yards_Against) %>% summarise(Games=length(Date), Wins=sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% ggplot(aes(x=Penalty_Yards_Against, y=100*WinPct))+geom_point() + xlab("Penalty Yards")+ylab("Winning Percentage")+labs(title="")
+
+```
+
+
+
+```{r, echo = F,  fig.align='center', fig.cap="A scatterplot displaying how a team's turnover margin is related to winning percentage. Turnover margin is found by taking the Opponent's turnovers minus the Team's turnovers. It is not a surprise that as a Team commits less turnovers than their Opponent (resulting in a positive turnover margin), the winning percentage increases."}
+Game_Logs %>% mutate(TurnoverBattle = D_Turnovers-O_Turnovers) %>% group_by(TurnoverBattle) %>% summarise(Games=length(Date),Wins=sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% ggplot(aes(x=TurnoverBattle, y=100*WinPct))+geom_point()+xlab("Turnover Margin")+ylab("Winning Percentage")+labs(title="")
+
+```
+
+
+```{r, echo = F,  fig.align='center', fig.cap="A scatterplot displaying how a team's offensive yards per play is related to winning percentage. It is not surprising that the more yards a team gains per play, the higher the winning percentage is. What is a little surprising is how strong the trend appears to be."}
+Game_Logs %>% group_by(O_Yards_Per_Play) %>% summarise(Games=length(Date), Wins=sum(Result=="Win")) %>% mutate(WinPct = Wins/Games) %>% ggplot(aes(x=O_Yards_Per_Play, y=100*WinPct))+geom_point() + xlab("Offensive Yards Per Play")+ylab("Winning Percentage")+labs(title="")
+
+```
+
+
+
+
+```{r, warning=F,echo = F,  fig.align='center',fig.cap="A graph showing the relationship between a team's offensive yards per play and points scored. Unsurprisingly, offenses that gain more yards per play tend to score more points."}
+Game_Logs %>% ggplot(aes(x=O_Yards_Per_Play, y=Points_Scored))+geom_hex()+xlab("Offensive Yards Per Play")+ylab("Points Scored")+labs(title="")
+```
+
+
+
+```{r, echo = F, warning=F,  fig.align='center', fig.cap="Relationship between a defense's yards given up per rush in a given week and the number of rushing attempts against that defense in the previous week. Commentators often claim that a defense that had many rush attempts the previous week may be less successful in stopping the run the following week. If this was true, one would expect to see a relationship between the previous week's defensive rushing attempts and the yards given up per rush the following week. The plot above does not seem to show an obviously strong relationship between these two variables."}
+Game_Logs %>% group_by(Team, Season) %>% mutate(Last_Week_D_Rushing_Attempts = c(NA,D_Rush_Att[-length(D_Rush_Att)])) %>% ggplot(aes(x=Last_Week_D_Rushing_Attempts, y=D_Rush_Avg))+geom_hex()+xlab("Previous Week Rush Attempts")+ylab("Yards Given Up Per Rush")
+
+```
+
+
+## Data Set Conclusion
+
